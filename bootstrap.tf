@@ -189,36 +189,36 @@ resource "local_file" "initcfg_txt" {
   content  = data.template_file.initcfg_txt.rendered
 }
 
-data "template_file" "bootstrap_cfg_vmseries0" {
+data "template_file" "bootstrap_cfg_LPAZ-05433-FW-PRIM" {
   template = file("bootstrap_files/config/vmseries.xml.template")
   vars = {
-    private_next_hop = cidrhost(azurerm_subnet.this["private"].address_prefix, 1)
-    public_next_hop = cidrhost(azurerm_subnet.this["public"].address_prefix, 1)
-    peer_management_ip = azurerm_network_interface.management["vmseries1"].private_ip_address
-    ha2_ip = azurerm_network_interface.ethernet0_3["vmseries0"].private_ip_address
-    ha2_subnet = cidrnetmask(azurerm_subnet.this["ha2"].address_prefix)
+    private_next_hop = cidrhost(azurerm_subnet.this["TRUST"].address_prefix, 1)
+    public_next_hop = cidrhost(azurerm_subnet.this["UNTRUST"].address_prefix, 1)
+    peer_management_ip = azurerm_network_interface.management["FW-SEC"].private_ip_address
+    ha2_ip = azurerm_network_interface.eth1_3["FW-PRIM"].private_ip_address
+    ha2_subnet = cidrnetmask(azurerm_subnet.this["HA"].address_prefix)
   }
 }
 
-data "template_file" "bootstrap_cfg_vmseries1" {
+data "template_file" "bootstrap_cfg_LPAZ-05433-FW-SEC" {
   template = file("bootstrap_files/config/vmseries.xml.template")
   vars = {
-    private_next_hop = cidrhost(azurerm_subnet.this["private"].address_prefix, 1)
-    public_next_hop = cidrhost(azurerm_subnet.this["public"].address_prefix, 1)
-    peer_management_ip = azurerm_network_interface.management["vmseries0"].private_ip_address
-    ha2_ip = azurerm_network_interface.ethernet0_3["vmseries1"].private_ip_address
-    ha2_subnet = cidrnetmask(azurerm_subnet.this["ha2"].address_prefix)
+    private_next_hop = cidrhost(azurerm_subnet.this["TRUST"].address_prefix, 1)
+    public_next_hop = cidrhost(azurerm_subnet.this["UNTRUST"].address_prefix, 1)
+    peer_management_ip = azurerm_network_interface.management["FW-PRIM"].private_ip_address
+    ha2_ip = azurerm_network_interface.eth1_3["FW-SEC"].private_ip_address
+    ha2_subnet = cidrnetmask(azurerm_subnet.this["HA"].address_prefix)
   }
 }
 
-resource "local_file" "bootstrap_xml_vmseries0" {
+resource "local_file" "bootstrap_xml_LPAZ-05433-FW-PRIM" {
   for_each = var.vmseries
-  filename = "${path.module}/tmp/vmseries0/config/bootstrap.xml"
-  content  = data.template_file.bootstrap_cfg_vmseries0.rendered
+  filename = "${path.module}/tmp/LPAZ-05433-FW-PRIM/config/bootstrap.xml"
+  content  = data.template_file.bootstrap_cfg_LPAZ-05433-FW-PRIM.rendered
 }
 
-resource "local_file" "bootstrap_xml_vmseries1" {
+resource "local_file" "bootstrap_xml_LPAZ-05433-FW-SEC" {
   for_each = var.vmseries
-  filename = "${path.module}/tmp/vmseries1/config/bootstrap.xml"
-  content  = data.template_file.bootstrap_cfg_vmseries1.rendered
+  filename = "${path.module}/tmp/LPAZ-05433-FW-SEC/config/bootstrap.xml"
+  content  = data.template_file.bootstrap_cfg_LPAZ-05433-FW-SEC.rendered
 }

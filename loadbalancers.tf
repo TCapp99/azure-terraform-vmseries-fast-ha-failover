@@ -1,4 +1,5 @@
-resource "azurerm_public_ip" "ingress" {
+### Create public IP for Palo ###
+resource "azurerm_public_ip" "PaloExt" {
   name                = "${var.loc_marker}-${var.coid}-LB-FW_UNTRUST-PIP00"
   location            = var.resource_location
   resource_group_name = var.resource_group_name
@@ -7,18 +8,20 @@ resource "azurerm_public_ip" "ingress" {
   sku                 = "Standard"
 }
 
-resource "azurerm_lb" "ingress" {
+### Create External LB for Palo ###
+resource "azurerm_lb" "PaloExt" {
   resource_group_name = var.resource_group_name
   location            = var.resource_location
   name                = "${var.loc_marker}-${var.coid}-LB-FW_UNTRUST"
   sku                 = "Standard"
   frontend_ip_configuration {
     name                 = "PaloLB_PubIP00"
-    public_ip_address_id = azurerm_public_ip.ingress.id
+    public_ip_address_id = azurerm_public_ip.PaloExt.id
   }
   depends_on = [azurerm_virtual_network.this]
 }
 
+### Create Backend Pool for Palo Ext LB ###
 resource "azurerm_lb_backend_address_pool" "eth1_1" {
   name            = "eth1_1"
   loadbalancer_id = azurerm_lb.PaloExt.id
@@ -26,6 +29,7 @@ resource "azurerm_lb_backend_address_pool" "eth1_1" {
   depends_on = [azurerm_linux_virtual_machine.vmseries]
 }
 
+### Create health probe on port 80 for Palo LB's ###
 resource "azurerm_lb_probe" "PaloExt_http_probe" {
   name                = "http"
   resource_group_name = var.resource_group_name
@@ -38,6 +42,7 @@ resource "azurerm_lb_probe" "PaloExt_http_probe" {
 
 }
 
+### Create TCP Load-Balancing rules for Palo Ext LB (see variables file for list of ports) ###
 resource "azurerm_lb_rule" "tcp" {
   count                          = length(var.inbound_tcp_ports)
   name                           = "tcp-${element(var.inbound_tcp_ports, count.index)}"
@@ -54,6 +59,7 @@ resource "azurerm_lb_rule" "tcp" {
   disable_outbound_snat          = true
 }
 
+### Create UDP Load-Balancing rules for Palo Ext LB (see variables file for list of ports) ###
 resource "azurerm_lb_rule" "udp" {
   count                          = length(var.inbound_udp_ports)
   name                           = "udp-${element(var.inbound_udp_ports, count.index)}"
