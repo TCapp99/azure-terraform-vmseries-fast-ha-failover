@@ -1,5 +1,5 @@
 resource "azurerm_public_ip" "ingress" {
-  name                = "ingress-lb-pip"
+  name                = "${var.loc_marker}-${var.coid}-LB-FW_UNTRUST-PIP00"
   location            = var.resource_location
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
@@ -10,28 +10,28 @@ resource "azurerm_public_ip" "ingress" {
 resource "azurerm_lb" "ingress" {
   resource_group_name = var.resource_group_name
   location            = var.resource_location
-  name                = "ingress-lb"
+  name                = "${var.loc_marker}-${var.coid}-LB-FW_UNTRUST"
   sku                 = "Standard"
   frontend_ip_configuration {
-    name                 = "PublicIPAddress"
+    name                 = "PaloLB_PubIP00"
     public_ip_address_id = azurerm_public_ip.ingress.id
   }
   depends_on = [azurerm_virtual_network.this]
 }
 
-resource "azurerm_lb_backend_address_pool" "ethernet0_1" {
-  name            = "vmseries_ethernet0_1"
-  loadbalancer_id = azurerm_lb.ingress.id
+resource "azurerm_lb_backend_address_pool" "eth1_1" {
+  name            = "eth1_1"
+  loadbalancer_id = azurerm_lb.PaloExt.id
 
   depends_on = [azurerm_linux_virtual_machine.vmseries]
 }
 
-resource "azurerm_lb_probe" "ingress_https" {
-  name                = "https"
+resource "azurerm_lb_probe" "PaloExt_http_probe" {
+  name                = "http"
   resource_group_name = var.resource_group_name
-  loadbalancer_id     = azurerm_lb.ingress.id
-  port                = 443
-  protocol            = "https"
+  loadbalancer_id     = azurerm_lb.PaloExt.id
+  port                = 80
+  protocol            = "http"
   request_path        = "/php/login.php"
   interval_in_seconds = 5
   number_of_probes    = 2
@@ -42,15 +42,15 @@ resource "azurerm_lb_rule" "tcp" {
   count                          = length(var.inbound_tcp_ports)
   name                           = "tcp-${element(var.inbound_tcp_ports, count.index)}"
   resource_group_name            = var.resource_group_name
-  loadbalancer_id                = azurerm_lb.ingress.id
+  loadbalancer_id                = azurerm_lb.PaloExt.id
   protocol                       = "TCP"
   frontend_port                  = element(var.inbound_tcp_ports, count.index)
   backend_port                   = element(var.inbound_tcp_ports, count.index)
-  frontend_ip_configuration_name = "PublicIPAddress"
-  backend_address_pool_id        = azurerm_lb_backend_address_pool.ethernet0_1.id
-  probe_id                       = azurerm_lb_probe.ingress_https.id
+  frontend_ip_configuration_name = "PaloLB_PubIP00"
+  backend_address_pool_id        = azurerm_lb_backend_address_pool.eth1_1.id
+  probe_id                       = azurerm_lb_probe.PaloExt_http_probe.id
   enable_floating_ip             = true
-  depends_on                     = [azurerm_lb.ingress, azurerm_lb_backend_address_pool.ethernet0_1]
+  depends_on                     = [azurerm_lb.PaloExt, azurerm_lb_backend_address_pool.eth1_1]
   disable_outbound_snat          = true
 }
 
@@ -58,55 +58,55 @@ resource "azurerm_lb_rule" "udp" {
   count                          = length(var.inbound_udp_ports)
   name                           = "udp-${element(var.inbound_udp_ports, count.index)}"
   resource_group_name            = var.resource_group_name
-  loadbalancer_id                = azurerm_lb.ingress.id
+  loadbalancer_id                = azurerm_lb.PaloExt.id
   protocol                       = "UDP"
   frontend_port                  = element(var.inbound_udp_ports, count.index)
   backend_port                   = element(var.inbound_udp_ports, count.index)
-  frontend_ip_configuration_name = "PublicIPAddress"
-  backend_address_pool_id        = azurerm_lb_backend_address_pool.ethernet0_1.id
-  probe_id                       = azurerm_lb_probe.ingress_https.id
+  frontend_ip_configuration_name = "PaloLB_PubIP00"
+  backend_address_pool_id        = azurerm_lb_backend_address_pool.eth1_1.id
+  probe_id                       = azurerm_lb_probe.PaloExt_http_probe.id
   enable_floating_ip             = true
-  depends_on                     = [azurerm_lb.ingress, azurerm_lb_backend_address_pool.ethernet0_1]
+  depends_on                     = [azurerm_lb.PaloExt, azurerm_lb_backend_address_pool.eth1_1]
   disable_outbound_snat          = true
 
 }
 
-resource "azurerm_network_interface_backend_address_pool_association" "ethernet0_1" {
+resource "azurerm_network_interface_backend_address_pool_association" "eth1_1" {
   for_each                = var.vmseries
-  network_interface_id    = azurerm_network_interface.ethernet0_1[each.key].id
+  network_interface_id    = azurerm_network_interface.eth1_1[each.key].id
   ip_configuration_name   = "ipconfig1"
-  backend_address_pool_id = azurerm_lb_backend_address_pool.ethernet0_1.id
+  backend_address_pool_id = azurerm_lb_backend_address_pool.eth1_1.id
 }
 
 
-resource "azurerm_lb" "egress" {
+resource "azurerm_lb" "PaloInt" {
   resource_group_name = var.resource_group_name
   location            = var.resource_location
-  name                = "egress-lb"
+  name                = "${var.loc_marker}-${var.coid}-LB-FW_TRUST"
   depends_on          = [azurerm_virtual_network.this]
   sku                 = "Standard"
 
   frontend_ip_configuration {
-    name      = "LoadBalancerIP"
-    subnet_id = azurerm_subnet.this["loadbalancer"].id
+    name      = "PaloLB_PrivIP00"
+    subnet_id = azurerm_subnet.this["LB"].id
   }
 }
 
-resource "azurerm_lb_probe" "egress_https" {
-  name                = "https"
+resource "azurerm_lb_probe" "PaloInt_http_probe" {
+  name                = "http"
   resource_group_name = var.resource_group_name
-  loadbalancer_id     = azurerm_lb.egress.id
-  port                = 443
-  protocol            = "https"
+  loadbalancer_id     = azurerm_lb.PaloInt.id
+  port                = 80
+  protocol            = "http"
   request_path        = "/php/login.php"
   interval_in_seconds = 5
   number_of_probes    = 2
 
 }
 
-resource "azurerm_lb_backend_address_pool" "ethernet0_2" {
-  name            = "ethernet0_2"
-  loadbalancer_id = azurerm_lb.egress.id
+resource "azurerm_lb_backend_address_pool" "eth1_2" {
+  name            = "eth1_2"
+  loadbalancer_id = azurerm_lb.PaloInt.id
 
   depends_on = [azurerm_linux_virtual_machine.vmseries]
 }
@@ -114,25 +114,25 @@ resource "azurerm_lb_backend_address_pool" "ethernet0_2" {
 resource "azurerm_lb_rule" "allports" {
   name                           = "all-ports"
   resource_group_name            = var.resource_group_name
-  loadbalancer_id                = azurerm_lb.egress.id
+  loadbalancer_id                = azurerm_lb.PaloInt.id
   protocol                       = "All"
   frontend_port                  = 0
   backend_port                   = 0
-  frontend_ip_configuration_name = "LoadBalancerIP"
-  backend_address_pool_id        = azurerm_lb_backend_address_pool.ethernet0_2.id
-  probe_id                       = azurerm_lb_probe.egress_https.id
+  frontend_ip_configuration_name = "PaloLB_PrivIP00"
+  backend_address_pool_id        = azurerm_lb_backend_address_pool.eth1_2.id
+  probe_id                       = azurerm_lb_probe.PaloInt_http_probe.id
   enable_floating_ip             = true
-  depends_on                     = [azurerm_network_interface.ethernet0_2]
+  depends_on                     = [azurerm_network_interface.eth1_2]
 }
 
-resource "azurerm_network_interface_backend_address_pool_association" "ethernet0_2" {
+resource "azurerm_network_interface_backend_address_pool_association" "eth1_2" {
   for_each                = var.vmseries
-  network_interface_id    = azurerm_network_interface.ethernet0_2[each.key].id
+  network_interface_id    = azurerm_network_interface.eth1_2[each.key].id
   ip_configuration_name   = "ipconfig1"
-  backend_address_pool_id = azurerm_lb_backend_address_pool.ethernet0_2.id
-  depends_on              = [azurerm_network_interface.ethernet0_2]
+  backend_address_pool_id = azurerm_lb_backend_address_pool.eth1_2.id
+  depends_on              = [azurerm_network_interface.eth1_2]
 }
 
-output "ingress_lb_pip" {
-  value = azurerm_public_ip.ingress.ip_address
+output "PaloExt_lb_pip" {
+  value = azurerm_public_ip.PaloExt.ip_address
 }
