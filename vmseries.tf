@@ -1,10 +1,12 @@
+
+
 # Creation of the following resources:
 #   - Azure Public IPs (Management)
-
+# This is commented out as we don't want a public IP for management (bad practice)
 # Public IP Address:
 resource "azurerm_public_ip" "management" {
   for_each            = var.vmseries
-  name                = "${each.key}-nic-management-pip"
+  name                = "${var.loc_marker}-${var.coid}-${each.key}-MGMT_PIP00"
   location            = var.resource_location
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
@@ -12,17 +14,21 @@ resource "azurerm_public_ip" "management" {
   sku                 = "Standard"
 }
 
+#----------------------------------------------------------------------------------------------------------------------
+# VM-Series - Management Interface
+#----------------------------------------------------------------------------------------------------------------------
+
 # Network Interface:
 resource "azurerm_network_interface" "management" {
   for_each             = var.vmseries
-  name                 = "${each.key}-nic-management"
+  name                 = "${var.loc_marker}-${var.coid}-${each.key}-MGMT_NIC00"
   location             = var.resource_location
   resource_group_name  = var.resource_group_name
   enable_ip_forwarding = false
 
   ip_configuration {
     name                          = "ipconfig1"
-    subnet_id                     = azurerm_subnet.this["management"].id
+    subnet_id                     = azurerm_subnet.this["MGMT"].id
     private_ip_address_allocation = "Static"
     private_ip_address            = each.value.management_ip
     public_ip_address_id          = azurerm_public_ip.management[each.key].id
@@ -32,7 +38,7 @@ resource "azurerm_network_interface" "management" {
 
 resource "azurerm_network_security_group" "management" {
   for_each            = var.vmseries
-  name                = "${each.key}-nsg-management"
+  name                = "${var.loc_marker}-${var.coid}-NSG-${each.key}_MGMT00"
   location            = var.resource_location
   resource_group_name = var.resource_group_name
 
@@ -59,13 +65,13 @@ resource "azurerm_network_interface_security_group_association" "management" {
 }
 
 #----------------------------------------------------------------------------------------------------------------------
-# VM-Series - Ethernet0/1 Interface (Untrust)
+# VM-Series - eth1_1 Interface (Untrust)
 #----------------------------------------------------------------------------------------------------------------------
 
 # Public IP Address
-resource "azurerm_public_ip" "ethernet_0_1" {
+resource "azurerm_public_ip" "eth1_1" {
   for_each            = var.vmseries
-  name                = "${each.key}-nic-ethernet01-pip"
+  name                = "${var.loc_marker}-${var.coid}-${each.key}-PIP00"
   location            = var.resource_location
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
@@ -74,9 +80,9 @@ resource "azurerm_public_ip" "ethernet_0_1" {
 }
 
 # Network Interface
-resource "azurerm_network_interface" "ethernet0_1" {
+resource "azurerm_network_interface" "eth1_1" {
   for_each             = var.vmseries
-  name                 = "${each.key}-nic-ethernet01"
+  name                 = "${var.loc_marker}-${var.coid}-${each.key}-UNTRUST_NIC00"
   location             = var.resource_location
   resource_group_name  = var.resource_group_name
   enable_ip_forwarding = true
@@ -84,17 +90,17 @@ resource "azurerm_network_interface" "ethernet0_1" {
 
   ip_configuration {
     name                          = "ipconfig1"
-    subnet_id                     = azurerm_subnet.this["public"].id
+    subnet_id                     = azurerm_subnet.this["UNTRUST"].id
     private_ip_address_allocation = "Static"
     private_ip_address            = each.value.public_ip
-    public_ip_address_id          = azurerm_public_ip.ethernet_0_1[each.key].id
+    public_ip_address_id          = azurerm_public_ip.eth1_1[each.key].id
   }
   depends_on = [azurerm_resource_group.this]
 }
 
 resource "azurerm_network_security_group" "data" {
   for_each            = var.vmseries
-  name                = "${each.key}-nsg-allow-all"
+  name                = "${var.loc_marker}-${var.coid}-NSG-${each.key}_DATA00"
   location            = var.resource_location
   resource_group_name = var.resource_group_name
 
@@ -126,20 +132,20 @@ resource "azurerm_network_security_group" "data" {
 }
 
 # Network Security Group (Data)
-resource "azurerm_network_interface_security_group_association" "ethernet0_1" {
+resource "azurerm_network_interface_security_group_association" "eth1_1" {
   for_each                  = var.vmseries
-  network_interface_id      = azurerm_network_interface.ethernet0_1[each.key].id
+  network_interface_id      = azurerm_network_interface.eth1_1[each.key].id
   network_security_group_id = azurerm_network_security_group.data[each.key].id
 }
 
 #----------------------------------------------------------------------------------------------------------------------
-# VM-Series - Ethernet0/2 Interface (Trust)
+# VM-Series - eth1_2 Interface (Trust)
 #----------------------------------------------------------------------------------------------------------------------
 
 # Network Interface
-resource "azurerm_network_interface" "ethernet0_2" {
+resource "azurerm_network_interface" "eth1_2" {
   for_each             = var.vmseries
-  name                 = "${each.key}-nic-ethernet02"
+  name                 = "${var.loc_marker}-${var.coid}-${each.key}-TRUST_NIC00"
   location             = var.resource_location
   resource_group_name  = var.resource_group_name
   enable_ip_forwarding = true
@@ -148,7 +154,7 @@ resource "azurerm_network_interface" "ethernet0_2" {
 
   ip_configuration {
     name                          = "ipconfig1"
-    subnet_id                     = azurerm_subnet.this["private"].id
+    subnet_id                     = azurerm_subnet.this["TRUST"].id
     private_ip_address_allocation = "Static"
     private_ip_address            = each.value.private_ip
   }
@@ -156,20 +162,20 @@ resource "azurerm_network_interface" "ethernet0_2" {
 }
 
 # Network Security Group (Data)
-resource "azurerm_network_interface_security_group_association" "ethernet0_2" {
+resource "azurerm_network_interface_security_group_association" "eth1_2" {
   for_each                  = var.vmseries
-  network_interface_id      = azurerm_network_interface.ethernet0_2[each.key].id
+  network_interface_id      = azurerm_network_interface.eth1_2[each.key].id
   network_security_group_id = azurerm_network_security_group.data[each.key].id
 }
 
 #----------------------------------------------------------------------------------------------------------------------
-# VM-Series - Ethernet0/2 Interface (Trust)
+# VM-Series - eth1_3 Interface (HA2)
 #----------------------------------------------------------------------------------------------------------------------
 
 # Network Interface
-resource "azurerm_network_interface" "ethernet0_3" {
+resource "azurerm_network_interface" "eth1_3" {
   for_each             = var.vmseries
-  name                 = "${each.key}-nic-ethernet03"
+  name                 = "${var.loc_marker}-${var.coid}-${each.key}-HA_NIC00"
   location             = var.resource_location
   resource_group_name  = var.resource_group_name
   enable_ip_forwarding = true
@@ -177,7 +183,7 @@ resource "azurerm_network_interface" "ethernet0_3" {
 
   ip_configuration {
     name                          = "ipconfig1"
-    subnet_id                     = azurerm_subnet.this["ha2"].id
+    subnet_id                     = azurerm_subnet.this["HA"].id
     private_ip_address_allocation = "Static"
     private_ip_address            = each.value.ha2_ip
   }
@@ -185,15 +191,20 @@ resource "azurerm_network_interface" "ethernet0_3" {
 }
 
 # Network Security Group (Data)
-resource "azurerm_network_interface_security_group_association" "ethernet0_3" {
+resource "azurerm_network_interface_security_group_association" "eth1_3" {
   for_each                  = var.vmseries
-  network_interface_id      = azurerm_network_interface.ethernet0_3[each.key].id
+  network_interface_id      = azurerm_network_interface.eth1_3[each.key].id
   network_security_group_id = azurerm_network_security_group.data[each.key].id
 }
 
 #----------------------------------------------------------------------------------------------------------------------
 # VM-Series - Virtual Machine
 #----------------------------------------------------------------------------------------------------------------------
+### *****NOTE***** - You will have to run the below command to be able to accept the license agreement and deploy the VM!
+### ************** - Make sure to change the subscription to the name of the one you want to deploy the VM's in!
+### ************** - THIS HAS TO BE DONE BEFORE DOING YOUR terraform apply!
+### **************************************************************************************************************************
+### az vm image terms accept --publisher paloaltonetworks --offer vmseries-flex --plan byol --subscription "ITS Shared Services"
 
 resource "azurerm_linux_virtual_machine" "vmseries" {
   for_each = var.vmseries
@@ -202,7 +213,7 @@ resource "azurerm_linux_virtual_machine" "vmseries" {
   resource_group_name = var.resource_group_name
   location            = var.resource_location
 
-  name = "${each.key}-vm"
+  name = "${var.loc_marker}-${var.coid}-${each.key}"
 
   # Availabilty Zone:
   zone = each.value.availability_zone
@@ -218,9 +229,9 @@ resource "azurerm_linux_virtual_machine" "vmseries" {
   # Network Interfaces:
   network_interface_ids = [
     azurerm_network_interface.management[each.key].id,
-    azurerm_network_interface.ethernet0_1[each.key].id,
-    azurerm_network_interface.ethernet0_2[each.key].id,
-    azurerm_network_interface.ethernet0_3[each.key].id,
+    azurerm_network_interface.eth1_1[each.key].id,
+    azurerm_network_interface.eth1_2[each.key].id,
+    azurerm_network_interface.eth1_3[each.key].id,
   ]
 
   plan {
@@ -237,7 +248,7 @@ resource "azurerm_linux_virtual_machine" "vmseries" {
   }
 
   os_disk {
-    name                 = "${each.key}-osdisk"
+    name                 = "${var.loc_marker}-${var.coid}-${each.key}-osdisk"
     caching              = "ReadWrite"
     storage_account_type = "Premium_LRS"
   }
@@ -255,16 +266,16 @@ resource "azurerm_linux_virtual_machine" "vmseries" {
 
   # Dependencies:
   depends_on = [
-    azurerm_network_interface.ethernet0_2,
-    azurerm_network_interface.ethernet0_1,
+    azurerm_network_interface.eth1_2,
+    azurerm_network_interface.eth1_1,
     azurerm_network_interface.management,
   ]
 }
 
-output "vmseries0_management_ip" {
-  value = azurerm_public_ip.management["vmseries0"].ip_address
+output "LPAZ-05433-FW-PRIM_management_ip" {
+  value = azurerm_public_ip.management["FW-PRIM"].ip_address
 }
 
-output "vmseries1_management_ip" {
-  value = azurerm_public_ip.management["vmseries1"].ip_address
+output "LPAZ-05433-FW-SEC_management_ip" {
+  value = azurerm_public_ip.management["FW-SEC"].ip_address
 }
